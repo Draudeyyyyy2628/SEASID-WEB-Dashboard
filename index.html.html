@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Seaweed Monitoring System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        /* Previous styles remain the same */
+        :root {
+            --primary: #2563eb;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1e293b;
+            --light: #f1f5f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto;
+        }
+
+        body {
+            background: url('/api/placeholder/1920/1080') no-repeat center center fixed;
+            background-size: cover;
+            color: #f8fafc;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            padding: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.85);
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            background: rgba(30, 41, 59, 0.9);
+            padding: 1rem;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            background: linear-gradient(45deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.9);
+            border-radius: 8px;
+            padding: 1rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-title {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .card-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+
+        .chart-container {
+            height: 300px;
+            width: 100%;
+            position: relative;
+        }
+
+        .alerts {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-width: 300px;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            background: var(--danger);
+            color: white;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* New video feed styles */
+        .video-feed {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .video-feed video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .camera-button {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .camera-button:hover {
+            opacity: 0.9;
+        }
+
+        .camera-button.stop {
+            background: var(--danger);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1>SEASID Web Dashboard</h1>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>System Online</span>
+            </div>
+        </header>
+
+        <!-- New Video Feed Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Live Camera Feed</div>
+            </div>
+            <div class="video-feed">
+                <video id="videoFeed" autoplay playsinline></video>
+            </div>
+            <div class="camera-controls">
+                <button id="startCamera" class="camera-button">Start Camera</button>
+                <button id="stopCamera" class="camera-button stop" disabled>Stop Camera</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Temperature</div>
+                </div>
+                <div class="card-value" id="temperature">--°C</div>
+                <div class="chart-container">
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Salinity</div>
+                </div>
+                <div class="card-value" id="salinity">-- ppt</div>
+                <div class="chart-container">
+                    <canvas id="salinityChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Water Pressure</div>
+                </div>
+                <div class="card-value" id="pressure">-- bar</div>
+                <div class="chart-container">
+                    <canvas id="pressureChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Disease Assessment</div>
+            </div>
+            <div class="card-value" id="diseaseStatus">NO DATA</div>
+        </div>
+    </div>
+
+    <div id="alerts" class="alerts"></div>
+
+    <script>
+        // Previous SensorDataManager class remains the same
+        class SensorDataManager {
+            constructor() {
+                this.temperatureData = Array(24).fill(null);
+                this.salinityData = Array(24).fill(null);
+                this.pressureData = Array(24).fill(null);
+                this.charts = {};
+                this.maxDataPoints = 24;
+                this.timeLabels = Array.from({length: 24}, (_, i) => `${i}:00`);
+            }
+
+            initializeCharts() {
+                const chartConfig = {
+                    type: 'line',
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#94a3b8'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#94a3b8'
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const tempCtx = document.getElementById('temperatureChart');
+                if (tempCtx) {
+                    this.charts.temperature = new Chart(tempCtx, {
+                        ...chartConfig,
+                        data: {
+                            labels: this.timeLabels,
+                            datasets: [{
+                                label: 'Temperature',
+                                data: this.temperatureData,
+                                borderColor: '#3b82f6',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                            }]
+                        }
+                    });
+                }
+
+                const salCtx = document.getElementById('salinityChart');
+                if (salCtx) {
+                    this.charts.salinity = new Chart(salCtx, {
+                        ...chartConfig,
+                        data: {
+                            labels: this.timeLabels,
+                            datasets: [{
+                                label: 'Salinity',
+                                data: this.salinityData,
+                                borderColor: '#22c55e',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)'
+                            }]
+                        }
+                    });
+                }
+
+                const presCtx = document.getElementById('pressureChart');
+                if (presCtx) {
+                    this.charts.pressure = new Chart(presCtx, {
+                        ...chartConfig,
+                        data: {
+                            labels: this.timeLabels,
+                            datasets: [{
+                                label: 'Pressure',
+                                data: this.pressureData,
+                                borderColor: '#f59e0b',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)'
+                            }]
+                        }
+                    });
+                }
+            }
+
+            updateData(newData) {
+                this.temperatureData.push(newData.temperature);
+                this.temperatureData.shift();
+                this.salinityData.push(newData.salinity);
+                this.salinityData.shift();
+                this.pressureData.push(newData.pressure);
+                this.pressureData.shift();
+
+                if (this.charts.temperature) {
+                    this.charts.temperature.data.datasets[0].data = this.temperatureData;
+                    this.charts.temperature.update();
+                }
+                if (this.charts.salinity) {
+                    this.charts.salinity.data.datasets[0].data = this.salinityData;
+                    this.charts.salinity.update();
+                }
+                if (this.charts.pressure) {
+                    this.charts.pressure.data.datasets[0].data = this.pressureData;
+                    this.charts.pressure.update();
+                }
+
+                document.getElementById('temperature').textContent = `${newData.temperature.toFixed(1)}°C`;
+                document.getElementById('salinity').textContent = `${newData.salinity.toFixed(1)} ppt`;
+                document.getElementById('pressure').textContent = `${newData.pressure.toFixed(2)} bar`;
+
+                if (newData.diseaseStatus) {
+                    document.getElementById('diseaseStatus').textContent = newData.diseaseStatus;
+                }
+            }
+        }
+
+        //LIVE VIDEO FEED 
+    class VideoFeedManager {
+        constructor() {
+            this.videoElement = document.getElementById('videoFeed');
+            this.startButton = document.getElementById('startCamera');
+            this.stopButton = document.getElementById('stopCamera');
+            this.stream = null;
+
+            // Check if getUserMedia is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showAlert('Camera API is not supported in your browser');
+                this.startButton.disabled = true;
+                return;
+            }
+
+            this.startButton.addEventListener('click', () => this.startCamera());
+            this.stopButton.addEventListener('click', () => this.stopCamera());
+        }
+
+        async startCamera() {
+            try {
+                // First stop any existing stream
+                if (this.stream) {
+                    this.stopCamera();
+                }
+
+                // Request camera access with more flexible constraints
+                const constraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    }
+                };
+
+                this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Double check if video element exists
+                if (!this.videoElement) {
+                    throw new Error('Video element not found');
+                }
+
+                // Set the stream and play
+                this.videoElement.srcObject = this.stream;
+                const playPromise = this.videoElement.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        this.startButton.disabled = true;
+                        this.stopButton.disabled = false;
+                        showAlert('Camera started successfully');
+                    }).catch(error => {
+                        console.error('Error playing video:', error);
+                        showAlert('Error playing video stream');
+                    });
+                }
+
+                // Log success for debugging
+                const track = this.stream.getVideoTracks()[0];
+                console.log('Camera started successfully:', track.getSettings());
+
+            } catch (error) {
+                console.error('Camera access error:', error);
+                
+                // Provide more specific error messages
+                if (error.name === 'NotAllowedError') {
+                    showAlert('Camera access denied. Please check your browser permissions.');
+                } else if (error.name === 'NotFoundError') {
+                    showAlert('No camera device found. Please check your camera connection.');
+                } else if (error.name === 'NotReadableError') {
+                    showAlert('Camera is already in use by another application.');
+                } else {
+                    showAlert(`Camera error: ${error.message}`);
+                }
+
+                // Reset buttons state
+                this.startButton.disabled = false;
+                this.stopButton.disabled = true;
+            }
+        }
+
+        stopCamera() {
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('Camera track stopped:', track.label);
+                });
+                if (this.videoElement) {
+                    this.videoElement.srcObject = null;
+                }
+                this.stream = null;
+                this.startButton.disabled = false;
+                this.stopButton.disabled = true;
+                showAlert('Camera stopped');
+            }
+        }
+    }
+
+        function showAlert(message) {
+            const alertsContainer = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = 'alert';
+            alert.textContent = message;
+            alertsContainer.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Initialize both managers when the page loads
+        window.addEventListener('load', () => {
+            const sensorManager = new SensorDataManager();
+            const videoManager = new VideoFeedManager();
+            
+            sensorManager.initializeCharts();
+
+            // Simulate sensor data
+            setInterval(() => {
+                const simulatedData = {
+                    temperature: 25 + Math.random() * 2,
+                    salinity: 34 + Math.random() * 2,
+                    pressure: 2 + Math.random() * 0.5,
+                    diseaseStatus: ['HEALTHY', 'MINOR ISSUES', 'CHECK REQUIRED', 'ATTENTION NEEDED'][Math.floor(Math.random() * 4)]
+                };
+                sensorManager.updateData(simulatedData);
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
